@@ -42,6 +42,7 @@ pub enum Request<'a> {
         uri: WampString,
         res: PendingRegisterResult,
         func_ptr: RpcFunc<'a>,
+        options: WampDict,
     },
     Unregister {
         rpc_id: WampId,
@@ -286,14 +287,20 @@ pub async fn register<'a>(
     uri: WampString,
     res: PendingRegisterResult,
     func_ptr: RpcFunc<'a>,
+    options: Option<WampDict>
 ) -> Status {
     let request = core.create_request();
+
+    let op = match options {
+        Some(c) => c,
+        None => WampDict::new()
+    };
 
     if let Err(e) = core
         .send(&Msg::Register {
             request,
             procedure: uri,
-            options: WampDict::new(),
+            options: op,
         })
         .await
     {

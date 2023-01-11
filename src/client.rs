@@ -563,6 +563,41 @@ impl<'a> Client<'a> {
             uri: uri.as_ref().to_string(),
             res,
             func_ptr: Box::new(move |a, k| Box::pin(func_ptr(a, k))),
+            options: WampDict::new()
+        }) {
+            return Err(From::from(format!(
+                "Core never received our request : {}",
+                e
+            )));
+        }
+
+        // Wait for the result
+        let rpc_id = match result.await {
+            Ok(r) => r?,
+            Err(e) => {
+                return Err(From::from(format!(
+                    "Core never returned a response : {}",
+                    e
+                )))
+            }
+        };
+
+        Ok(rpc_id)
+    }
+
+    pub async fn register_with_options<T, F, Fut>(&self, uri: T, func_ptr: F, options: WampDict) -> Result<WampId, WampError>
+    where
+        T: AsRef<str>,
+        F: Fn(Option<WampArgs>, Option<WampKwArgs>) -> Fut + Send + Sync + 'a,
+        Fut: Future<Output = Result<(Option<WampArgs>, Option<WampKwArgs>), WampError>> + Send + 'a,
+    {
+        // Send the request
+        let (res, result) = oneshot::channel();
+        if let Err(e) = self.ctl_channel.send(Request::Register {
+            uri: uri.as_ref().to_string(),
+            res,
+            func_ptr: Box::new(move |a, k| Box::pin(func_ptr(a, k))),
+            options: options,
         }) {
             return Err(From::from(format!(
                 "Core never received our request : {}",
