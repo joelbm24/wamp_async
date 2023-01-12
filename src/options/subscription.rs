@@ -14,6 +14,10 @@ pub struct SubscriptionOptionItem(Option<WampDict>);
 /// Provides functions for adding defined options to the WampDict
 impl SubscriptionOptionItem {
     /// Add an option for pattern matching the topic of the subscription
+    pub fn match_(match_option: MatchOption) -> Self {
+        SubscriptionOptionItem::new().with_match(match_option)
+    }
+
     pub fn with_match(&self, match_option: MatchOption) -> Self {
         self.with_option(WampOption::SubscribeOption("match".to_owned(), Arg::String(match_option.value())))
     }

@@ -45,9 +45,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
             "Subscribing to peer.heartbeat events. Start another instance with a 'pub' argument"
         );
         // Prefix Match
-        let (sub_id, mut heartbeat_queue) = client.subscribe_with_options("peer.heartbeat", SubscribeOptions::new().with_match(MatchOption::Prefix)).await?;
+        let (sub_id, mut heartbeat_queue) = client.subscribe_with_options("peer.heartbeat", SubscribeOptions::match_(MatchOption::Prefix)).await?;
         // Wildcard match with empty uri part
-        let (last_sub_id, mut heartbeat_last) = client.subscribe_with_options("peer..9", SubscribeOptions::new().with_match(MatchOption::Wildcard)).await?;
+        let (last_sub_id, mut heartbeat_last) = client.subscribe_with_options("peer..9", SubscribeOptions::match_(MatchOption::Wildcard)).await?;
         println!("Waiting for {} heartbeats...", max_events);
 
         while cur_event_num < max_events {
