@@ -102,6 +102,7 @@ let rpc_id = client.register("peer.echo", rpc_echo).await?;
 | Secure RawSocket | RawSocket with TLS                                                                     | ✔      |
 | MsgPack          | Use [MessagePack](https://en.wikipedia.org/wiki/MessagePack) for message serialization | ✔      |
 | JSON             | Uses [JSON](https://en.wikipedia.org/wiki/JSON#Example) for message serialization      | ✔      |
+| CBOR             | Uses [CBOR](https://cbor.io/) for message serialization                                | ✔      |
 
 ### Client
 
