@@ -15,8 +15,16 @@ pub struct RegistrationOptionItem(Option<WampDict>);
 /// Provides functions for adding defined options to the WampDict
 impl RegistrationOptionItem {
     /// Add an option for pattern matching the topic of the subscription
+    pub fn invoke(invoke_option: InvokeOption) -> Self {
+        RegistrationOptions::new().with_invoke(invoke_option)
+    }
+
     pub fn with_invoke(&self, invoke_option: InvokeOption) -> Self {
         self.with_option(WampOption::RegisterOption("invoke".to_owned(), Arg::String(invoke_option.value())))
+    }
+
+    pub fn match_(match_option: MatchOption) -> Self {
+        RegistrationOptions::new().with_match(match_option)
     }
 
     pub fn with_match(&self, match_option: MatchOption) -> Self {

@@ -92,7 +92,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     client.join_realm("realm1").await?;
 
     // Register our functions to a uri
-    let echo_options = RegistrationOptions::new().with_invoke(InvokeOption::Last);
+    let echo_options = RegistrationOptions::invoke(InvokeOption::Last);
 
     let echo_rpc_id = client.register_with_options("peer.echo", echo, echo_options).await?;
     let strict_echo_rpc_id = client.register("peer.strict_echo", strict_echo).await?;
