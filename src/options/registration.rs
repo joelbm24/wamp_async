@@ -50,11 +50,11 @@ impl OptionBuilder for RegistrationOptionItem {
 
 /// Default
 impl Default for RegistrationOptionItem {
-    /// Create a new empty SubscriptionOptionItem
+    /// Create a new empty RegistrationOptionItem
     fn default() -> Self {
         Self::empty()
     }
 }
 
-/// Alias for SubscriptionOptionItem
+/// Alias for RegistrationOptionItem
 pub type RegistrationOptions = RegistrationOptionItem;
