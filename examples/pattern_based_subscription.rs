@@ -1,5 +1,5 @@
 use std::error::Error;
-use wamp_async::{Client, ClientConfig, OptionBuilder, SubscribeOptions, Arg};
+use wamp_async::{Client, ClientConfig, OptionBuilder, SubscribeOptions, Arg, MatchOption};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -45,9 +45,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
             "Subscribing to peer.heartbeat events. Start another instance with a 'pub' argument"
         );
         // Prefix Match
-        let (sub_id, mut heartbeat_queue) = client.subscribe("peer.heartbeat", SubscribeOptions::new().with_match("prefix")).await?;
+        let (sub_id, mut heartbeat_queue) = client.subscribe("peer.heartbeat", SubscribeOptions::new().with_match(MatchOption::Prefix)).await?;
         // Wildcard match with empty uri part
-        let (last_sub_id, mut heartbeat_last) = client.subscribe("peer..9", SubscribeOptions::new().with_match("wildcard")).await?;
+        let (last_sub_id, mut heartbeat_last) = client.subscribe("peer..9", SubscribeOptions::new().with_match(MatchOption::Wildcard)).await?;
         println!("Waiting for {} heartbeats...", max_events);
 
         while cur_event_num < max_events {
@@ -62,8 +62,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         } + 1;
                     },
                     None => println!("Subscription is done"),
-                }
-
+                },
                 last = heartbeat_last.recv() => match last {
                     Some((pub_id, details, args, kwargs)) => {
                         // We know we are done here.

@@ -2,25 +2,30 @@ use crate::{
     WampDict,
     Arg
 };
-use crate::options::option::{
+pub use crate::options::option::{
     OptionBuilder,
     WampOption,
     MatchOption,
+    InvokeOption,
 };
 
 /// Base struct for storing WampDict value
-pub struct SubscriptionOptionItem(Option<WampDict>);
+pub struct RegistrationOptionItem(Option<WampDict>);
 
 /// Provides functions for adding defined options to the WampDict
-impl SubscriptionOptionItem {
+impl RegistrationOptionItem {
     /// Add an option for pattern matching the topic of the subscription
+    pub fn with_invoke(&self, invoke_option: InvokeOption) -> Self {
+        self.with_option(WampOption::RegisterOption("invoke".to_owned(), Arg::String(invoke_option.value())))
+    }
+
     pub fn with_match(&self, match_option: MatchOption) -> Self {
-        self.with_option(WampOption::SubscribeOption("match".to_owned(), Arg::String(match_option.value())))
+        self.with_option(WampOption::RegisterOption("match".to_owned(), Arg::String(match_option.value())))
     }
 }
 
 /// Add base OptionBuilder functionality
-impl OptionBuilder for SubscriptionOptionItem {
+impl OptionBuilder for RegistrationOptionItem {
     /// Build a new SubscriptionOptionItem from a provided Option<WampDict>
     fn create(options: Option<WampDict>) -> Self where Self: OptionBuilder + Sized {
         Self(options)
@@ -33,7 +38,7 @@ impl OptionBuilder for SubscriptionOptionItem {
 }
 
 /// Default
-impl Default for SubscriptionOptionItem {
+impl Default for RegistrationOptionItem {
     /// Create a new empty SubscriptionOptionItem
     fn default() -> Self {
         Self::empty()
@@ -41,4 +46,4 @@ impl Default for SubscriptionOptionItem {
 }
 
 /// Alias for SubscriptionOptionItem
-pub type SubscribeOptions = SubscriptionOptionItem;
+pub type RegistrationOptions = RegistrationOptionItem;

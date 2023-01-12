@@ -4,6 +4,43 @@ use crate::{
     WampString,
 };
 
+pub enum InvokeOption {
+    Single,
+    First,
+    Last,
+    Roundrobin,
+    Random
+
+}
+
+impl InvokeOption {
+    pub fn value(&self) -> String {
+        match *self {
+            InvokeOption::Single => "single".to_owned(),
+            InvokeOption::First => "first".to_owned(),
+            InvokeOption::Last => "last".to_owned(),
+            InvokeOption::Roundrobin => "roundrobin".to_owned(),
+            InvokeOption::Random => "random".to_owned(),
+        }
+    }
+}
+
+pub enum MatchOption {
+    Exact,
+    Prefix,
+    Wildcard,
+}
+
+impl MatchOption {
+    pub fn value(&self) -> String {
+        match *self {
+            MatchOption::Exact => "exact".to_owned(),
+            MatchOption::Prefix => "prefix".to_owned(),
+            MatchOption::Wildcard => "wildcard".to_owned(),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 /// Options specific to roles for key/value pairs
 pub enum WampOption<K, V> {
@@ -23,7 +60,7 @@ pub enum WampOption<K, V> {
 pub trait OptionBuilder {
 
     /// Clones or creates a WampDict and inserts the key/value pair from the supplied WampOption
-    /// 
+    ///
     /// * `option` - The key/value pair to insert into the dictionary
     fn with_option(&self, option: WampOption<String, Arg>) -> Self where Self: OptionBuilder + Sized {
         let mut next_options = match &self.get_dict() {
@@ -44,7 +81,7 @@ pub trait OptionBuilder {
     // TODO: Actual validation per role here
     /// WIP (currently not functional)
     /// Validate that the option being passed in is relevant for the role, and that they type of the value is correct for the given key.
-    /// 
+    ///
     /// * `option` - The key/value pair to validate
     fn validate_option(option: WampOption<String, Arg>) -> Option<(WampString, Arg)> {
         match option {
@@ -55,7 +92,7 @@ pub trait OptionBuilder {
             WampOption::None => None,
         }
     }
-    
+
     /// Create a new empty builder - provided for convention
     fn new() -> Self where Self: OptionBuilder + Sized {
         Self::empty()
