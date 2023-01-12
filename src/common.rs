@@ -121,7 +121,7 @@ unsafe impl Send for CryptoSign {}
 unsafe impl Sync for CryptoSign {}
 
 /// Generic enum that can hold any concrete WAMP value
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(untagged)]
 pub enum Arg {
     /// uri: a string URI as defined in URIs
@@ -161,6 +161,28 @@ impl ClientRole {
             ClientRole::Callee => "callee",
             ClientRole::Publisher => "publisher",
             ClientRole::Subscriber => "subscriber",
+        }
+    }
+
+    /// Creates a features dictionary to declare for the role
+    pub fn get_features(&self) -> WampDict {
+        match self {
+            ClientRole::Subscriber => {
+                let mut features = WampDict::new();
+                for feature in vec!["pattern_based_subscription"] {
+                    features.insert(feature.to_owned(), Arg::Bool(true));
+                }
+                features.clone()
+            },
+            _ => WampDict::new()
+        }
+    }
+
+    /// Returns true if the role has features that need to be declared
+    pub fn has_features(&self) -> bool {
+        match self {
+            ClientRole::Subscriber => true,
+            _ => false
         }
     }
 }
