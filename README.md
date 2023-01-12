@@ -117,11 +117,11 @@ let rpc_id = client.register("peer.echo", rpc_echo).await?;
 
 #### Advanced profile:
 
-| Feature                     | Desciption                                                      | Status      |
-| --------------------------- | --------------------------------------------------------------- | ----------- |
-| Client Authentication       | Low-level support for Client Authentication (Ticket-based, CRA) | ✔           |
-| Pattern Based Subscriptions | Wildcard, and Prefix matches for channel topics                 | ✔           |
-| Progressive Calls           | Partial results reported from Callee to Caller                  | help wanted |
+| Feature                     | Desciption                                                                  | Status      |
+| --------------------------- | --------------------------------------------------------------------------- | ----------- |
+| Client Authentication       | Low-level support for Client Authentication (Ticket-based, CRA, CryptoSign) | ✔           |
+| Pattern Based Subscriptions | Wildcard, and Prefix matches for channel topics                             | ✔           |
+| Progressive Calls           | Partial results reported from Callee to Caller                              | help wanted |
 
 ## License
 
