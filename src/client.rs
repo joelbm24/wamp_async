@@ -445,7 +445,8 @@ impl<'a> Client<'a> {
     ///
     /// This function returns a subscription ID (required to unsubscribe) and
     /// the receive end of a channel for events published on the topic.
-    pub async fn subscribe<T: AsRef<str>>(
+
+    async fn _subscribe<T: AsRef<str>>(
         &self,
         topic: T,
         options: SubscribeOptions
@@ -478,6 +479,21 @@ impl<'a> Client<'a> {
         };
 
         Ok((sub_id, evt_queue))
+    }
+
+    pub async fn subscribe<T: AsRef<str>>(
+        &self,
+        topic: T,
+    ) -> Result<(WampId, SubscriptionQueue), WampError> {
+        self._subscribe(topic, SubscribeOptions::new()).await
+    }
+
+    pub async fn subscribe_with_options<T: AsRef<str>>(
+        &self,
+        topic: T,
+        options: SubscribeOptions
+    ) -> Result<(WampId, SubscriptionQueue), WampError> {
+        self._subscribe(topic, options).await
     }
 
     /// Unsubscribes to a previously subscribed topic
@@ -557,41 +573,7 @@ impl<'a> Client<'a> {
     /// Register an RPC endpoint. Upon succesful registration, a registration ID is returned (used to unregister)
     /// and calls received from the server will generate a future which will be sent on the rpc event channel
     /// returned by the call to [event_loop()](struct.Client.html#method.event_loop)
-    pub async fn register<T, F, Fut>(&self, uri: T, func_ptr: F) -> Result<WampId, WampError>
-    where
-        T: AsRef<str>,
-        F: Fn(Option<WampArgs>, Option<WampKwArgs>) -> Fut + Send + Sync + 'a,
-        Fut: Future<Output = Result<(Option<WampArgs>, Option<WampKwArgs>), WampError>> + Send + 'a,
-    {
-        // Send the request
-        let (res, result) = oneshot::channel();
-        if let Err(e) = self.ctl_channel.send(Request::Register {
-            uri: uri.as_ref().to_string(),
-            res,
-            func_ptr: Box::new(move |a, k| Box::pin(func_ptr(a, k))),
-            options: WampDict::new()
-        }) {
-            return Err(From::from(format!(
-                "Core never received our request : {}",
-                e
-            )));
-        }
-
-        // Wait for the result
-        let rpc_id = match result.await {
-            Ok(r) => r?,
-            Err(e) => {
-                return Err(From::from(format!(
-                    "Core never returned a response : {}",
-                    e
-                )))
-            }
-        };
-
-        Ok(rpc_id)
-    }
-
-    pub async fn register_with_options<T, F, Fut>(&self, uri: T, func_ptr: F, options: RegistrationOptions) -> Result<WampId, WampError>
+    async fn _register<T, F, Fut>(&self, uri: T, func_ptr: F, options: RegistrationOptions) -> Result<WampId, WampError>
     where
         T: AsRef<str>,
         F: Fn(Option<WampArgs>, Option<WampKwArgs>) -> Fut + Send + Sync + 'a,
@@ -627,6 +609,26 @@ impl<'a> Client<'a> {
         };
 
         Ok(rpc_id)
+    }
+
+    pub async fn register<T, F, Fut>(&self, uri: T, func_ptr: F) -> Result<WampId, WampError>
+    where
+        T: AsRef<str>,
+        F: Fn(Option<WampArgs>, Option<WampKwArgs>) -> Fut + Send + Sync + 'a,
+        Fut: Future<Output = Result<(Option<WampArgs>, Option<WampKwArgs>), WampError>> + Send + 'a,
+    {
+        self._register(uri, func_ptr, RegistrationOptions::new()).await
+    }
+
+
+
+    pub async fn register_with_options<T, F, Fut>(&self, uri: T, func_ptr: F, options: RegistrationOptions) -> Result<WampId, WampError>
+    where
+        T: AsRef<str>,
+        F: Fn(Option<WampArgs>, Option<WampKwArgs>) -> Fut + Send + Sync + 'a,
+        Fut: Future<Output = Result<(Option<WampArgs>, Option<WampKwArgs>), WampError>> + Send + 'a,
+    {
+        self._register(uri, func_ptr, options).await
     }
 
     /// Unregisters an RPC endpoint

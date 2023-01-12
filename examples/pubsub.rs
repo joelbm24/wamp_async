@@ -44,7 +44,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         println!(
             "Subscribing to peer.heartbeat events. Start another instance with a 'pub' argument"
         );
-        let (sub_id, mut heartbeat_queue) = client.subscribe("peer.heartbeat", SubscribeOptions::new()).await?;
+        let (sub_id, mut heartbeat_queue) = client.subscribe("peer.heartbeat").await?;
         println!("Waiting for {} heartbeats...", max_events);
 
         while cur_event_num < max_events {
