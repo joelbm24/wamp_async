@@ -67,6 +67,20 @@ impl Default for ClientConfig {
     }
 }
 
+impl Clone for ClientConfig {
+    fn clone(&self) -> Self {
+        ClientConfig {
+            agent: self.agent.clone(),
+            roles: self.roles.clone(),
+            serializers: self.serializers.clone(),
+            authextra: self.authextra.clone(),
+            max_msg_size: self.max_msg_size.clone(),
+            ssl_verify: self.ssl_verify.clone(),
+            websocket_headers: self.websocket_headers.clone()
+        }
+    }
+}
+
 impl ClientConfig {
     /// Replaces the default user agent string. Set to a zero length string to disable
     pub fn set_agent<T: AsRef<str>>(mut self, agent: T) -> Self {
@@ -160,6 +174,23 @@ pub enum ClientState {
     Running,
     /// Disconnected from a server
     Disconnected(Result<(), WampError>),
+}
+
+impl Clone for ClientState {
+    fn clone(&self) -> Self {
+        // TODO reimplement this!
+        match self {
+            Self::NoEventLoop => ClientState::NoEventLoop,
+            Self::Disconnected(c) => {
+                let res: Result<(), WampError> = match c.to_owned() {
+                    Ok(a) => Ok(*a),
+                    Err(_e) => Err(WampError::ClientDied)
+                };
+                ClientState::Disconnected(res)
+            },
+            Self::Running => ClientState::Running
+        }
+    }
 }
 
 impl<'a> Client<'a> {
@@ -781,6 +812,25 @@ impl<'a> Client<'a> {
                 None => error!("Core never sent a status after shutting down..."),
                 _ => {}
             }
+        }
+    }
+}
+
+
+// TODO we probably don't want to actually clone the client
+// we really would just clone a subset of fields and functions in their own special struct
+// ie call, publish, subscribe, session_id, config and ctl_channel
+
+impl<'a> Clone for Client<'a> {
+    fn clone(&self) -> Self {
+        let (_core_res_w, core_res) = mpsc::unbounded_channel();
+        Client {
+            config: self.config.clone(),
+            core_res: core_res,
+            server_roles: self.server_roles.clone(),
+            core_status: self.core_status.clone(),
+            session_id: self.session_id.clone(),
+            ctl_channel: self.ctl_channel.clone(),
         }
     }
 }

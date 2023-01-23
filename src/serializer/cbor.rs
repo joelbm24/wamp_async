@@ -6,6 +6,7 @@ pub struct CborSerializer {}
 
 impl SerializerImpl for CborSerializer {
     fn pack(&self, value: &Msg) -> Result<Vec<u8>, SerializerError> {
+        println!("{:?}", value);
         match to_vec(value) {
             Ok(v) => Ok(v),
             Err(e) => Err(SerializerError::Serialization(e.to_string())),
