@@ -607,16 +607,16 @@ impl<'a> Client<'a> {
     async fn _register<T, F, Fut>(&self, uri: T, func_ptr: F, options: RegistrationOptions) -> Result<WampId, WampError>
     where
         T: AsRef<str>,
-        F: Fn(Option<WampArgs>, Option<WampKwArgs>) -> Fut + Send + Sync + 'a,
+        F: Fn(Client<'a>, Option<WampArgs>, Option<WampKwArgs>) -> Fut + Send + Sync + 'a,
         Fut: Future<Output = Result<(Option<WampArgs>, Option<WampKwArgs>), WampError>> + Send + 'a,
     {
         // Send the request
         let (res, result) = oneshot::channel();
-
+        let c = self.clone();
         if let Err(e) = self.ctl_channel.send(Request::Register {
             uri: uri.as_ref().to_string(),
             res,
-            func_ptr: Box::new(move |a, k| Box::pin(func_ptr(a, k))),
+            func_ptr: Box::new(move |a, k| Box::pin(func_ptr(c.to_owned(), a, k))),
             options: match options.get_dict() {
                 Some(dict) => dict,
                 None => WampDict::new(),
@@ -645,18 +645,17 @@ impl<'a> Client<'a> {
     pub async fn register<T, F, Fut>(&self, uri: T, func_ptr: F) -> Result<WampId, WampError>
     where
         T: AsRef<str>,
-        F: Fn(Option<WampArgs>, Option<WampKwArgs>) -> Fut + Send + Sync + 'a,
+        F: Fn(Client<'a>, Option<WampArgs>, Option<WampKwArgs>) -> Fut + Send + Sync + 'a,
         Fut: Future<Output = Result<(Option<WampArgs>, Option<WampKwArgs>), WampError>> + Send + 'a,
     {
         self._register(uri, func_ptr, RegistrationOptions::new()).await
     }
 
 
-
     pub async fn register_with_options<T, F, Fut>(&self, uri: T, func_ptr: F, options: RegistrationOptions) -> Result<WampId, WampError>
     where
         T: AsRef<str>,
-        F: Fn(Option<WampArgs>, Option<WampKwArgs>) -> Fut + Send + Sync + 'a,
+        F: Fn(Client<'a>, Option<WampArgs>, Option<WampKwArgs>) -> Fut + Send + Sync + 'a,
         Fut: Future<Output = Result<(Option<WampArgs>, Option<WampKwArgs>), WampError>> + Send + 'a,
     {
         self._register(uri, func_ptr, options).await
@@ -817,9 +816,9 @@ impl<'a> Client<'a> {
 }
 
 
-// TODO we probably don't want to actually clone the client
-// we really would just clone a subset of fields and functions in their own special struct
-// ie call, publish, subscribe, session_id, config and ctl_channel
+// TODO we probably don't want to actually clone the client.
+// We probably want to make a special client that forwards actions to the main client through a channel.
+// The main client would be responsible for the connection. so a disconnect could be propegated properly.
 
 impl<'a> Clone for Client<'a> {
     fn clone(&self) -> Self {

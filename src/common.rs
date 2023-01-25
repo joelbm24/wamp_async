@@ -12,6 +12,8 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 use crate::error::*;
 
+use crate::message::Msg;
+
 pub(crate) const DEFAULT_AGENT_STR: &str =
     concat!(env!("CARGO_PKG_NAME"), "_rs-", env!("CARGO_PKG_VERSION"));
 
@@ -59,12 +61,46 @@ pub type WampList = Vec<Arg>;
 ///
 /// Implementation note: we currently use `serde_json::Value`, which is
 /// suboptimal when you want to use MsgPack and pass binary data.
+
 pub type WampPayloadValue = serde_json::Value;
 /// Unnamed WAMP argument list
 pub type WampArgs = Vec<WampPayloadValue>;
 /// Named WAMP argument map
 pub type WampKwArgs = serde_json::Map<String, WampPayloadValue>;
 
+pub type WampResult = Result<(Option<WampArgs>, Option<WampKwArgs>), WampError>;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ServiceErrorDetails {
+    pub args: WampList,
+    pub kwargs: WampDict,
+}
+
+impl ServiceErrorDetails {
+    pub fn new(args: Option<WampList>, kwargs: Option<WampDict>) -> Self {
+        let a = match args {
+            Some(d) => d,
+            None => vec![]
+        };
+
+        let k = match kwargs {
+            Some(d) => d,
+            None => WampDict::default()
+        };
+
+        ServiceErrorDetails { args: a, kwargs: k}
+    }
+    pub fn get_args(&self) -> Result<WampArgs, WampError> {
+        try_into_args(&self.args)
+    }
+
+    pub fn get_kwargs(&self) -> Result<WampKwArgs, WampError> {
+        try_into_kwargs(&self.kwargs)
+    }
+
+    pub fn get_error_message(&self) -> () {
+    }
+}
 
 #[derive(Copy, Clone)]
 pub struct CryptoSign {

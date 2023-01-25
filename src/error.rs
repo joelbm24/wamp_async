@@ -51,5 +51,10 @@ quick_error! {
             context(uri: String, details: WampDict) -> (uri, details)
             display("The server returned an error: {} {:?}", uri, details)
         }
+        /// The server sent us an Error message
+        ServiceError(uri: String, details: ServiceErrorDetails) {
+            context(uri: String, details: ServiceErrorDetails) -> (uri, details)
+            display("The server returned an error: {} {:?}", uri, details)
+        }
     }
 }
