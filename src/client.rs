@@ -644,7 +644,7 @@ impl<'a> Client<'a> {
         Ok(rpc_id)
     }
 
-    pub async fn register_with_client<T, F, Fut>(&self, uri: T, func_ptr: F, options: Option<RegistrationOptions>) -> Result<WampId, WampError>
+    pub async fn register_with_client<T, F, Fut>(&self, uri: T, func_ptr: F, options: RegistrationOptions) -> Result<WampId, WampError>
     where
         T: AsRef<str>,
         F: Fn(Client, Option<WampArgs>, Option<WampKwArgs>) -> Fut + Send + Sync + 'a,
@@ -652,11 +652,6 @@ impl<'a> Client<'a> {
     {
         // Send the request
         let (res, result) = oneshot::channel();
-
-        let my_options = match options {
-            Some(o) => o,
-            None => RegistrationOptions::default()
-        };
 
         let copy_client = self.clone();
         if let Err(e) = self.ctl_channel.send(Request::Register {
