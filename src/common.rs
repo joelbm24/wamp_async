@@ -12,8 +12,6 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 use crate::error::*;
 
-use crate::message::Msg;
-
 pub(crate) const DEFAULT_AGENT_STR: &str =
     concat!(env!("CARGO_PKG_NAME"), "_rs-", env!("CARGO_PKG_VERSION"));
 
