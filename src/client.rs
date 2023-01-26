@@ -658,7 +658,7 @@ impl<'a> Client<'a> {
             uri: uri.as_ref().to_string(),
             res,
             func_ptr: Box::new(move |a, k| Box::pin(func_ptr(copy_client.to_owned(), a, k))),
-            options: match my_options.get_dict() {
+            options: match options.get_dict() {
                 Some(dict) => dict,
                 None => WampDict::new(),
             },
