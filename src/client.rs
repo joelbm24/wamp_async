@@ -647,7 +647,7 @@ impl<'a> Client<'a> {
     pub async fn register_with_client<T, F, Fut>(&self, uri: T, func_ptr: F, options: RegistrationOptions) -> Result<WampId, WampError>
     where
         T: AsRef<str>,
-        F: Fn(Client, Option<WampArgs>, Option<WampKwArgs>) -> Fut + Send + Sync + 'a,
+        F: Fn(Client<'a>, Option<WampArgs>, Option<WampKwArgs>) -> Fut + Send + Sync + 'a,
         Fut: Future<Output = Result<(Option<WampArgs>, Option<WampKwArgs>), WampError>> + Send + 'a,
     {
         // Send the request
