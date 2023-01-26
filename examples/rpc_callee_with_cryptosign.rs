@@ -1,10 +1,11 @@
 use std::error::Error;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 
 use lazy_static::*;
 
 use wamp_async::{
-    Client, ClientConfig, ClientState, SerializerType, WampArgs, WampError, WampKwArgs,
+    Client, ClientConfig, ClientState, SerializerType, WampArgs, WampError, WampKwArgs, RegistrationOptions, InvokeOption
 };
 
 lazy_static! {
@@ -12,7 +13,7 @@ lazy_static! {
 }
 
 // Simply return the rpc arguments
-async fn echo(
+async fn echo<'a>(
     args: Option<WampArgs>,
     kwargs: Option<WampKwArgs>,
 ) -> Result<(Option<WampArgs>, Option<WampKwArgs>), WampError> {
@@ -98,7 +99,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
         ).await?;
 
     // Register our functions to a uri
-    let echo_rpc_id = client.register("peer.echo", echo).await?;
+    let options = RegistrationOptions::invoke(InvokeOption::Last);
+    let echo_rpc_id = client.register_with_options("peer.echo", echo, options).await?;
     let strict_echo_rpc_id = client.register("peer.strict_echo", strict_echo).await?;
 
     println!("Waiting for 'peer.echo' to be called at least 4 times");

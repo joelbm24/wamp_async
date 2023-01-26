@@ -84,7 +84,7 @@ pub async fn join_realm(
         if role.has_features() {
             roledict.insert("features".to_owned(), Arg::Dict(role.get_features()));
         }
-        
+
         client_roles.insert(String::from(role.to_str()), Arg::Dict(roledict.clone()));
     }
     details.insert("roles".to_owned(), Arg::Dict(client_roles));
@@ -373,13 +373,39 @@ pub async fn invoke_yield(
             arguments,
             arguments_kw,
         },
-        Err(e) => Msg::Error {
-            typ: INVOCATION_ID as WampInteger,
-            request,
-            details: WampDict::new(),
-            error: "wamp.async.rs.rpc.failed".to_string(),
-            arguments: Some(vec![format!("{:?}", e).into()]),
-            arguments_kw: None,
+        Err(e) => {
+            let uri = match &e {
+                WampError::ApplicationError(c, _d) => {
+                    c.to_owned()
+                },
+                _ => "wamp.async.rs.rpc.failed".to_string()
+            };
+
+            let service_details = match &e {
+                WampError::ApplicationError(_c, d) => {
+                    Some(d.to_owned())
+                },
+                _ => None
+            };
+
+            let (arguments, kwargs): (Vec<WampPayloadValue>, WampKwArgs) = match service_details {
+                Some(d) => {
+                    (d.get_args().unwrap(), d.get_kwargs().unwrap())
+                },
+                None =>
+                {
+                    (vec![format!("{:?}", e).into()], WampKwArgs::new())
+                }
+            };
+
+            Msg::Error {
+                typ: INVOCATION_ID as WampInteger,
+                request,
+                details: WampDict::new(),
+                error: uri,
+                arguments: Some(arguments),
+                arguments_kw: Some(kwargs),
+            }
         },
     };
     if core.send(&msg).await.is_err() {
