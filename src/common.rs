@@ -71,12 +71,12 @@ pub type WampKwArgs = serde_json::Map<String, WampPayloadValue>;
 pub type WampResult = Result<(Option<WampArgs>, Option<WampKwArgs>), WampError>;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ServiceErrorDetails {
+pub struct ApplicationErrorDetails {
     pub args: WampList,
     pub kwargs: WampDict,
 }
 
-impl ServiceErrorDetails {
+impl ApplicationErrorDetails {
     pub fn new(args: Option<WampList>, kwargs: Option<WampDict>) -> Self {
         let a = match args {
             Some(d) => d,
@@ -88,7 +88,7 @@ impl ServiceErrorDetails {
             None => WampDict::default()
         };
 
-        ServiceErrorDetails { args: a, kwargs: k}
+        ApplicationErrorDetails { args: a, kwargs: k}
     }
     pub fn get_args(&self) -> Result<WampArgs, WampError> {
         try_into_args(&self.args)

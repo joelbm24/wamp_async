@@ -375,14 +375,14 @@ pub async fn invoke_yield(
         },
         Err(e) => {
             let uri = match &e {
-                WampError::ServiceError(c, d) => {
+                WampError::ApplicationError(c, d) => {
                     c.to_owned()
                 },
                 _ => "wamp.async.rs.rpc.failed".to_string()
             };
 
             let service_details = match &e {
-                WampError::ServiceError(_c, d) => {
+                WampError::ApplicationError(_c, d) => {
                     Some(d.to_owned())
                 },
                 _ => None

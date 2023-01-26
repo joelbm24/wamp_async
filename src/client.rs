@@ -1,6 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use std::future::Future;
 use futures::FutureExt;
+use std::sync::{Arc, Mutex};
 
 use log::*;
 use tokio::sync::oneshot;
@@ -156,7 +157,7 @@ pub struct Client<'a> {
     /// Configuration struct used to customize the client
     config: ClientConfig,
     /// Generic transport
-    core_res: UnboundedReceiver<Result<(), WampError>>,
+    core_res: Arc<Mutex<UnboundedReceiver<Result<(), WampError>>>>,
     core_status: ClientState,
     /// Roles supported by the server
     server_roles: HashSet<String>,
@@ -241,13 +242,15 @@ impl<'a> Client<'a> {
             None
         };
 
+        //let clone_res = Arc::new(core_res);
+
         Ok((
             Client {
                 config,
                 server_roles: HashSet::new(),
                 session_id: None,
                 ctl_channel,
-                core_res,
+                core_res: Arc::new(Mutex::new(core_res)),
                 core_status: ClientState::NoEventLoop,
             },
             (Box::pin(conn.event_loop()), rpc_evt_queue),
@@ -607,17 +610,60 @@ impl<'a> Client<'a> {
     async fn _register<T, F, Fut>(&self, uri: T, func_ptr: F, options: RegistrationOptions) -> Result<WampId, WampError>
     where
         T: AsRef<str>,
-        F: Fn(Client<'a>, Option<WampArgs>, Option<WampKwArgs>) -> Fut + Send + Sync + 'a,
+        F: Fn(Option<WampArgs>, Option<WampKwArgs>) -> Fut + Send + Sync + 'a,
         Fut: Future<Output = Result<(Option<WampArgs>, Option<WampKwArgs>), WampError>> + Send + 'a,
     {
         // Send the request
         let (res, result) = oneshot::channel();
-        let c = self.clone();
         if let Err(e) = self.ctl_channel.send(Request::Register {
             uri: uri.as_ref().to_string(),
             res,
-            func_ptr: Box::new(move |a, k| Box::pin(func_ptr(c.to_owned(), a, k))),
+            func_ptr: Box::new(move |a, k| Box::pin(func_ptr(a, k))),
             options: match options.get_dict() {
+                Some(dict) => dict,
+                None => WampDict::new(),
+            },
+        }) {
+            return Err(From::from(format!(
+                "Core never received our request : {}",
+                e
+            )));
+        }
+
+        // Wait for the result
+        let rpc_id = match result.await {
+            Ok(r) => r?,
+            Err(e) => {
+                return Err(From::from(format!(
+                    "Core never returned a response : {}",
+                    e
+                )))
+            }
+        };
+
+        Ok(rpc_id)
+    }
+
+    pub async fn register_with_client<T, F, Fut>(&self, uri: T, func_ptr: F, options: Option<RegistrationOptions>) -> Result<WampId, WampError>
+    where
+        T: AsRef<str>,
+        F: Fn(Client, Option<WampArgs>, Option<WampKwArgs>) -> Fut + Send + Sync + 'a,
+        Fut: Future<Output = Result<(Option<WampArgs>, Option<WampKwArgs>), WampError>> + Send + 'a,
+    {
+        // Send the request
+        let (res, result) = oneshot::channel();
+
+        let my_options = match options {
+            Some(o) => o,
+            None => RegistrationOptions::default()
+        };
+
+        let copy_client = self.clone();
+        if let Err(e) = self.ctl_channel.send(Request::Register {
+            uri: uri.as_ref().to_string(),
+            res,
+            func_ptr: Box::new(move |a, k| Box::pin(func_ptr(copy_client.to_owned(), a, k))),
+            options: match my_options.get_dict() {
                 Some(dict) => dict,
                 None => WampDict::new(),
             },
@@ -645,7 +691,7 @@ impl<'a> Client<'a> {
     pub async fn register<T, F, Fut>(&self, uri: T, func_ptr: F) -> Result<WampId, WampError>
     where
         T: AsRef<str>,
-        F: Fn(Client<'a>, Option<WampArgs>, Option<WampKwArgs>) -> Fut + Send + Sync + 'a,
+        F: Fn(Option<WampArgs>, Option<WampKwArgs>) -> Fut + Send + Sync + 'a,
         Fut: Future<Output = Result<(Option<WampArgs>, Option<WampKwArgs>), WampError>> + Send + 'a,
     {
         self._register(uri, func_ptr, RegistrationOptions::new()).await
@@ -655,7 +701,7 @@ impl<'a> Client<'a> {
     pub async fn register_with_options<T, F, Fut>(&self, uri: T, func_ptr: F, options: RegistrationOptions) -> Result<WampId, WampError>
     where
         T: AsRef<str>,
-        F: Fn(Client<'a>, Option<WampArgs>, Option<WampKwArgs>) -> Fut + Send + Sync + 'a,
+        F: Fn(Option<WampArgs>, Option<WampKwArgs>) -> Fut + Send + Sync + 'a,
         Fut: Future<Output = Result<(Option<WampArgs>, Option<WampKwArgs>), WampError>> + Send + 'a,
     {
         self._register(uri, func_ptr, options).await
@@ -721,7 +767,7 @@ impl<'a> Client<'a> {
     /// Returns the current client status
     pub fn get_cur_status(&mut self) -> &ClientState {
         // Check to see if the status changed
-        let new_status = self.core_res.recv().now_or_never();
+        let new_status = self.core_res.lock().unwrap().recv().now_or_never();
         #[allow(clippy::match_wild_err_arm)]
         match new_status {
             Some(Some(state)) => self.set_next_status(state),
@@ -770,7 +816,7 @@ impl<'a> Client<'a> {
         }
 
         // Yield until we receive something
-        let new_status = match self.core_res.recv().await {
+        let new_status = match self.core_res.lock().unwrap().recv().await {
             Some(v) => v,
             None => {
                 panic!("The event loop died without sending a new status");
@@ -806,7 +852,7 @@ impl<'a> Client<'a> {
             let _ = self.ctl_channel.send(Request::Shutdown);
 
             // Wait for return status from core
-            match self.core_res.recv().await {
+            match self.core_res.lock().unwrap().recv().await {
                 Some(Err(e)) => error!("Error while shutting down : {:?}", e),
                 None => error!("Core never sent a status after shutting down..."),
                 _ => {}
@@ -822,10 +868,9 @@ impl<'a> Client<'a> {
 
 impl<'a> Clone for Client<'a> {
     fn clone(&self) -> Self {
-        let (_core_res_w, core_res) = mpsc::unbounded_channel();
         Client {
             config: self.config.clone(),
-            core_res: core_res,
+            core_res: Arc::clone(&self.core_res),
             server_roles: self.server_roles.clone(),
             core_status: self.core_status.clone(),
             session_id: self.session_id.clone(),
