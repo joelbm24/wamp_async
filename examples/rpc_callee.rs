@@ -58,13 +58,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     // Connect to the server
     let (mut client, (evt_loop, rpc_evt_queue)) = Client::connect(
-        "wss://localhost:8080/ws",
+        "ws://localhost:8080/ws",
         Some(
             ClientConfig::default()
                 // Allow invalid/self signed certs
                 .set_ssl_verify(false)
                 // Use MsgPack first or fallback to Json
-                .set_serializers(vec![SerializerType::MsgPack, SerializerType::Json]),
+                .set_serializers(vec![SerializerType::Json]),
         ),
     )
     .await?;
@@ -98,7 +98,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     println!("Waiting for 'peer.echo' to be called at least 4 times");
     loop {
         let call_num = RPC_CALL_COUNT.load(Ordering::Relaxed);
-        if call_num >= 4 || !client.is_connected().await {
+        if call_num >= 100 || !client.is_connected().await {
             break;
         }
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
