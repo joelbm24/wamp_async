@@ -1,6 +1,5 @@
 use std::error::Error;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
 
 use lazy_static::*;
 
@@ -106,14 +105,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
     println!("Waiting for 'peer.echo' to be called at least 4 times");
     loop {
         let call_num = RPC_CALL_COUNT.load(Ordering::Relaxed);
-        if call_num >= 4 || !client.is_connected() {
+        if call_num >= 4 || !client.is_connected().await {
             break;
         }
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
     }
 
     // Client should not have disconnected
-    if let ClientState::Disconnected(Err(e)) = client.get_cur_status() {
+    if let ClientState::Disconnected(Err(e)) = client.get_cur_status().await {
         println!("Client disconnected because of : {:?}", e);
         return Err(From::from("Unexpected disconnect".to_string()));
     }

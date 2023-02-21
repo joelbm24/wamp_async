@@ -1,7 +1,8 @@
 use std::collections::{HashMap, HashSet};
 use std::future::Future;
 use futures::FutureExt;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc};
+use tokio::sync::Mutex;
 
 use log::*;
 use tokio::sync::oneshot;
@@ -268,13 +269,13 @@ impl<'a> Client<'a> {
         on_challenge_handler: Option<AuthenticationChallengeHandler<'a>>,
     ) -> Result<(), WampError> {
         // Make sure the event loop is ready to process requests
-        if let ClientState::NoEventLoop = self.get_cur_status() {
+        if let ClientState::NoEventLoop = self.get_cur_status().await {
             debug!("Called join_realm() before th event loop is ready... Waiting...");
             self.wait_for_status_change().await;
         }
 
         // Make sure we are still connected to a server
-        if !self.is_connected() {
+        if !self.is_connected().await {
             return Err(From::from(
                 "The client is currently not connected".to_string(),
             ));
@@ -441,7 +442,7 @@ impl<'a> Client<'a> {
     /// Leaves the current realm and terminates the session with the server
     pub async fn leave_realm(&mut self) -> Result<(), WampError> {
         // Make sure we are still connected to a server
-        if !self.is_connected() {
+        if !self.is_connected().await {
             return Err(From::from(
                 "The client is currently not connected".to_string(),
             ));
@@ -760,9 +761,11 @@ impl<'a> Client<'a> {
     }
 
     /// Returns the current client status
-    pub fn get_cur_status(&mut self) -> &ClientState {
+    pub async fn get_cur_status(&mut self) -> &ClientState {
         // Check to see if the status changed
-        let new_status = self.core_res.lock().unwrap().recv().now_or_never();
+        let new_status = {
+            self.core_res.lock().await.recv().now_or_never()
+        };
         #[allow(clippy::match_wild_err_arm)]
         match new_status {
             Some(Some(state)) => self.set_next_status(state),
@@ -772,8 +775,8 @@ impl<'a> Client<'a> {
     }
 
     /// Returns whether we are connected to the server or not
-    pub fn is_connected(&mut self) -> bool {
-        match self.get_cur_status() {
+    pub async fn is_connected(&mut self) -> bool {
+        match self.get_cur_status().await {
             ClientState::Running => true,
             _ => false,
         }
@@ -811,12 +814,13 @@ impl<'a> Client<'a> {
         }
 
         // Yield until we receive something
-        let new_status = match self.core_res.lock().unwrap().recv().await {
+        let new_status = {
+            match self.core_res.lock().await.recv().await {
             Some(v) => v,
             None => {
                 panic!("The event loop died without sending a new status");
             }
-        };
+        }};
 
         // Save the new status
         self.set_next_status(new_status)
@@ -824,7 +828,7 @@ impl<'a> Client<'a> {
 
     /// Blocks the caller until the connection with the server is terminated
     pub async fn block_until_disconnect(&mut self) -> &ClientState {
-        let mut cur_status = self.get_cur_status();
+        let mut cur_status = self.get_cur_status().await;
         loop {
             match cur_status {
                 ClientState::Disconnected(_) => break,
@@ -840,17 +844,19 @@ impl<'a> Client<'a> {
 
     /// Cleanly closes a connection with the server
     pub async fn disconnect(mut self) {
-        if self.is_connected() {
+        if self.is_connected().await {
             // Cleanly leave realm
             let _ = self.leave_realm().await;
             // Stop the eventloop and disconnect from server
             let _ = self.ctl_channel.send(Request::Shutdown);
 
             // Wait for return status from core
-            match self.core_res.lock().unwrap().recv().await {
-                Some(Err(e)) => error!("Error while shutting down : {:?}", e),
-                None => error!("Core never sent a status after shutting down..."),
-                _ => {}
+            {
+                match self.core_res.lock().await.recv().await {
+                    Some(Err(e)) => error!("Error while shutting down : {:?}", e),
+                    None => error!("Core never sent a status after shutting down..."),
+                    _ => {}
+                }
             }
         }
     }
