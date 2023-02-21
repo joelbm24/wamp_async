@@ -1,6 +1,5 @@
 use std::error::Error;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
 
 use lazy_static::*;
 
