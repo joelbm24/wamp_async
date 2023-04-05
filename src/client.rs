@@ -487,7 +487,7 @@ impl<'a> Client<'a> {
         options: SubscribeOptions
     ) -> Result<(WampId, SubscriptionQueue), WampError> {
         // Send the request
-        let (res, result) = oneshot::channel();
+        let (mut res, result) = oneshot::channel();
         if let Err(e) = self.ctl_channel.send(Request::Subscribe {
             uri: topic.as_ref().to_string(),
             options: match options.get_dict() {

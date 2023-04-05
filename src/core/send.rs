@@ -211,7 +211,7 @@ pub async fn subscribe(
     res: PendingSubResult
 ) -> Status {
     let request = core.create_request();
-
+    println!("SUB {} {} {}", request, topic, res.is_closed());
     if let Err(e) = core
         .send(&Msg::Subscribe {
             request,
@@ -221,10 +221,9 @@ pub async fn subscribe(
         .await
     {
         core.pending_requests.remove(&request);
-        let _ = res.send(Err(e));
+        // let _ = res.send(Err(e));
         return Status::Shutdown;
     }
-
     core.pending_sub.insert(request, res);
 
     Status::Ok
