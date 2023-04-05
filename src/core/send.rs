@@ -211,8 +211,7 @@ pub async fn subscribe(
     res: PendingSubResult
 ) -> Status {
     let request = core.create_request();
-
-    if let Err(e) = core
+    if let Err(_e) = core
         .send(&Msg::Subscribe {
             request,
             topic,
@@ -221,10 +220,9 @@ pub async fn subscribe(
         .await
     {
         core.pending_requests.remove(&request);
-        let _ = res.send(Err(e));
+        // let _ = res.send(Err(e));
         return Status::Shutdown;
     }
-
     core.pending_sub.insert(request, res);
 
     Status::Ok

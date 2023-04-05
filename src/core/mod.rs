@@ -64,6 +64,8 @@ pub type PendingCallResult = Sender<
     >,
 >;
 
+type SubscriptionChannel = UnboundedSender<(WampId, WampDict, Option<WampArgs>, Option<WampKwArgs>)>;
+
 pub struct Core<'a> {
     /// Generic transport
     sock: Box<dyn Transport + Send>,
@@ -84,7 +86,7 @@ pub struct Core<'a> {
     /// Pending subscription requests sent to the server
     pending_sub: HashMap<WampId, PendingSubResult>,
     /// Current subscriptions
-    subscriptions: HashMap<WampId, UnboundedSender<(WampId, WampDict, Option<WampArgs>, Option<WampKwArgs>)>>,
+    subscriptions: HashMap<WampId, Vec<SubscriptionChannel>>,
 
     /// Pending RPC registration requests sent to the server
     pending_register: HashMap<WampId, (RpcFunc<'a>, PendingRegisterResult)>,

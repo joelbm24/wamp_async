@@ -11,15 +11,16 @@ pub async fn subscribed(core: &mut Core<'_>, request: WampId, sub_id: WampId) ->
             return Status::Ok;
         }
     };
+    let (evt_queue_w, evt_queue_r) = mpsc::unbounded_channel();
 
-    if core.subscriptions.contains_key(&sub_id) {
-        warn!("Server sent subcribed event for ID we already we subscribed to...");
-        return Status::Ok;
+    if !core.subscriptions.contains_key(&sub_id) {
+        core.subscriptions.insert(sub_id, vec![]);
     }
 
     // Add the subscription ID to our subscription map
-    let (evt_queue_w, evt_queue_r) = mpsc::unbounded_channel();
-    let _ = core.subscriptions.insert(sub_id, evt_queue_w);
+    let mut subs = core.subscriptions.get(&sub_id).unwrap().to_owned();
+    subs.insert(0, evt_queue_w);
+    core.subscriptions.insert(sub_id, subs);
 
     // Send the event queue back to the requestor
     let _ = res.send(Ok((sub_id, evt_queue_r)));
@@ -66,7 +67,7 @@ pub async fn event(
     arguments: Option<WampArgs>,
     arguments_kw: Option<WampKwArgs>,
 ) -> Status {
-    let evt_queue = match core.subscriptions.get(&subscription) {
+    let evt_queues = match core.subscriptions.get(&subscription) {
         Some(e) => e,
         None => {
             warn!(
@@ -78,16 +79,19 @@ pub async fn event(
     };
 
     // Forward the event to the client
-    if evt_queue
-        .send((publication, details, arguments, arguments_kw))
-        .is_err()
-    {
-        warn!(
-            "Client not listenning to subscription {} but did not unsubscribe...",
-            subscription
-        );
-        // TODO : Should we be nice and send an UNSUBSCRIBE to the server ?
-    }
+    evt_queues.into_iter().for_each(|evt_queue| {
+        if evt_queue
+            .send((publication, details.clone(), arguments.clone(), arguments_kw.clone()))
+            .is_err()
+        {
+            warn!(
+                "Client not listenning to subscription {} but did not unsubscribe...",
+                subscription
+            );
+            // TODO : Should we be nice and send an UNSUBSCRIBE to the server ?
+        }
+
+    });
 
     Status::Ok
 }
