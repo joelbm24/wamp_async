@@ -11,7 +11,6 @@ pub async fn subscribed(core: &mut Core<'_>, request: WampId, sub_id: WampId) ->
             return Status::Ok;
         }
     };
-    println!("SUB ID {}", sub_id);
     let (evt_queue_w, evt_queue_r) = mpsc::unbounded_channel();
 
     if !core.subscriptions.contains_key(&sub_id) {
