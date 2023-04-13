@@ -1,5 +1,5 @@
 use std::error::Error;
-use wamp_async::{Client, ClientConfig, SubscribeOptions, Arg, MatchOption};
+use wamp_async::{Client, WampClient, ClientConfig, SubscribeOptions, Arg, MatchOption};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {

@@ -4,7 +4,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use lazy_static::*;
 
 use wamp_async::{
-    Client, ClientConfig, ClientState, SerializerType, WampArgs, WampError, WampKwArgs,
+    Client, WampClient, ClientConfig, ClientState, SerializerType, WampArgs, WampError, WampKwArgs,
 };
 
 lazy_static! {

@@ -1,7 +1,7 @@
 use std::error::Error;
 use std::sync::{Arc, RwLock};
 
-use wamp_async::{Client, ClientConfig, SerializerType, WampArgs, WampKwArgs};
+use wamp_async::{Client, WampClient, ClientConfig, SerializerType, WampArgs, WampKwArgs};
 
 #[derive(Debug)]
 struct MyState {

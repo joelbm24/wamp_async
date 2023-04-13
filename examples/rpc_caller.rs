@@ -3,7 +3,7 @@ use std::error::Error;
 use serde::{Deserialize, Serialize};
 
 use wamp_async::{
-    try_into_any_value, Client, ClientConfig, ClientRole, SerializerType, WampKwArgs,
+    try_into_any_value, Client, WampClient, ClientConfig, ClientRole, SerializerType, WampKwArgs,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
