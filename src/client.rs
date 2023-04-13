@@ -3,6 +3,7 @@ use std::future::Future;
 use futures::FutureExt;
 use std::sync::{Arc};
 use tokio::sync::Mutex;
+use async_trait::async_trait;
 
 use log::*;
 use tokio::sync::oneshot;
@@ -153,19 +154,30 @@ impl ClientConfig {
     }
 }
 
-/// Allows interaction as a client with a WAMP server
-pub struct Client<'a> {
-    /// Configuration struct used to customize the client
-    config: ClientConfig,
-    /// Generic transport
-    core_res: Arc<Mutex<UnboundedReceiver<Result<(), WampError>>>>,
-    core_status: ClientState,
-    /// Roles supported by the server
-    server_roles: HashSet<String>,
-    /// Current Session ID
-    session_id: Option<WampId>,
-    /// Channel to send requests to the event loop
-    ctl_channel: UnboundedSender<Request<'a>>,
+#[async_trait]
+pub trait WampClient<'a> {
+    async fn register<T, F, Fut>(&self, uri: T, func_ptr: F) -> Result<WampId, WampError>
+    where
+        T: AsRef<str> + Send,
+        F: Fn(Option<WampArgs>, Option<WampKwArgs>) -> Fut + Send + Sync + 'a,
+        Fut: Future<Output = Result<(Option<WampArgs>, Option<WampKwArgs>), WampError>> + Send + 'a;
+
+    async fn subscribe<T: AsRef<str> + Send>(&self, topic: T) -> Result<(WampId, SubscriptionQueue), WampError>;
+
+    async fn publish<T: AsRef<str> + Send>(
+        &self,
+        topic: T,
+        arguments: Option<WampArgs>,
+        arguments_kw: Option<WampKwArgs>,
+        acknowledge: bool,
+    ) -> Result<Option<WampId>, WampError>;
+
+    async fn call<T: AsRef<str> + Send>(
+        &self,
+        uri: T,
+        arguments: Option<WampArgs>,
+        arguments_kw: Option<WampKwArgs>,
+    ) -> WampResult;
 }
 
 /// All the states a client can be in
@@ -192,6 +204,122 @@ impl Clone for ClientState {
             },
             Self::Running => ClientState::Running
         }
+    }
+}
+
+/// Allows interaction as a client with a WAMP server
+pub struct Client<'a> {
+    /// Configuration struct used to customize the client
+    config: ClientConfig,
+    /// Generic transport
+    core_res: Arc<Mutex<UnboundedReceiver<Result<(), WampError>>>>,
+    /// Current status of client
+    core_status: ClientState,
+    /// Roles supported by the server
+    server_roles: HashSet<String>,
+    /// Current Session ID
+    session_id: Option<WampId>,
+    /// Channel to send requests to the event loop
+    ctl_channel: UnboundedSender<Request<'a>>,
+}
+
+#[async_trait]
+impl<'a> WampClient<'a> for Client<'a> {
+    async fn register<T, F, Fut>(&self, uri: T, func_ptr: F) -> Result<WampId, WampError>
+    where
+        T: AsRef<str> + Send,
+        F: Fn(Option<WampArgs>, Option<WampKwArgs>) -> Fut + Send + Sync + 'a,
+        Fut: Future<Output = Result<(Option<WampArgs>, Option<WampKwArgs>), WampError>> + Send + 'a,
+    {
+        self._register(uri, func_ptr, RegistrationOptions::new()).await
+    }
+
+    async fn subscribe<T: AsRef<str> + Send>(
+        &self,
+        topic: T,
+    ) -> Result<(WampId, SubscriptionQueue), WampError> {
+        self._subscribe(topic, SubscribeOptions::new()).await
+    }
+
+    /// Calls a registered RPC endpoint on the server
+    async fn call<T: AsRef<str> + Send>(
+        &self,
+        uri: T,
+        arguments: Option<WampArgs>,
+        arguments_kw: Option<WampKwArgs>,
+    ) -> Result<(Option<WampArgs>, Option<WampKwArgs>), WampError> {
+        // Send the request
+        let (res, result) = oneshot::channel();
+        if let Err(e) = self.ctl_channel.send(Request::Call {
+            uri: uri.as_ref().to_string(),
+            options: WampDict::new(),
+            arguments,
+            arguments_kw,
+            res,
+        }) {
+            return Err(From::from(format!(
+                "Core never received our request : {}",
+                e
+            )));
+        }
+
+        // Wait for the result
+        match result.await {
+            Ok(r) => r,
+            Err(e) => Err(From::from(format!(
+                "Core never returned a response : {}",
+                e
+            ))),
+        }
+    }
+
+    /// Publishes an event on a specific topic
+    ///
+    /// The caller can set `acknowledge` to true to receive unique IDs from the server
+    /// for each published event.
+    async fn publish<T: AsRef<str> + Send>(
+        &self,
+        topic: T,
+        arguments: Option<WampArgs>,
+        arguments_kw: Option<WampKwArgs>,
+        acknowledge: bool,
+    ) -> Result<Option<WampId>, WampError> {
+        let mut options = WampDict::new();
+
+        if acknowledge {
+            options.insert("acknowledge".to_string(), Arg::Bool(true));
+        }
+        // Send the request
+        let (res, result) = oneshot::channel();
+        if let Err(e) = self.ctl_channel.send(Request::Publish {
+            uri: topic.as_ref().to_string(),
+            options,
+            arguments,
+            arguments_kw,
+            res,
+        }) {
+            return Err(From::from(format!(
+                "Core never received our request : {}",
+                e
+            )));
+        }
+
+        let pub_id = if acknowledge {
+            // Wait for the acknowledgement
+            Some(match result.await {
+                Ok(Ok(r)) => r.unwrap(),
+                Ok(Err(e)) => return Err(From::from(format!("Failed to send publish : {}", e))),
+                Err(e) => {
+                    return Err(From::from(format!(
+                        "Core never returned a response : {}",
+                        e
+                    )))
+                }
+            })
+        } else {
+            None
+        };
+        Ok(pub_id)
     }
 }
 
@@ -516,13 +644,6 @@ impl<'a> Client<'a> {
         Ok((sub_id, evt_queue))
     }
 
-    pub async fn subscribe<T: AsRef<str>>(
-        &self,
-        topic: T,
-    ) -> Result<(WampId, SubscriptionQueue), WampError> {
-        self._subscribe(topic, SubscribeOptions::new()).await
-    }
-
     pub async fn subscribe_with_options<T: AsRef<str>>(
         &self,
         topic: T,
@@ -554,55 +675,6 @@ impl<'a> Client<'a> {
         };
 
         Ok(())
-    }
-
-    /// Publishes an event on a specific topic
-    ///
-    /// The caller can set `acknowledge` to true to receive unique IDs from the server
-    /// for each published event.
-    pub async fn publish<T: AsRef<str>>(
-        &self,
-        topic: T,
-        arguments: Option<WampArgs>,
-        arguments_kw: Option<WampKwArgs>,
-        acknowledge: bool,
-    ) -> Result<Option<WampId>, WampError> {
-        let mut options = WampDict::new();
-
-        if acknowledge {
-            options.insert("acknowledge".to_string(), Arg::Bool(true));
-        }
-        // Send the request
-        let (res, result) = oneshot::channel();
-        if let Err(e) = self.ctl_channel.send(Request::Publish {
-            uri: topic.as_ref().to_string(),
-            options,
-            arguments,
-            arguments_kw,
-            res,
-        }) {
-            return Err(From::from(format!(
-                "Core never received our request : {}",
-                e
-            )));
-        }
-
-        let pub_id = if acknowledge {
-            // Wait for the acknowledgement
-            Some(match result.await {
-                Ok(Ok(r)) => r.unwrap(),
-                Ok(Err(e)) => return Err(From::from(format!("Failed to send publish : {}", e))),
-                Err(e) => {
-                    return Err(From::from(format!(
-                        "Core never returned a response : {}",
-                        e
-                    )))
-                }
-            })
-        } else {
-            None
-        };
-        Ok(pub_id)
     }
 
     /// Register an RPC endpoint. Upon succesful registration, a registration ID is returned (used to unregister)
@@ -684,15 +756,6 @@ impl<'a> Client<'a> {
         Ok(rpc_id)
     }
 
-    pub async fn register<T, F, Fut>(&self, uri: T, func_ptr: F) -> Result<WampId, WampError>
-    where
-        T: AsRef<str>,
-        F: Fn(Option<WampArgs>, Option<WampKwArgs>) -> Fut + Send + Sync + 'a,
-        Fut: Future<Output = Result<(Option<WampArgs>, Option<WampKwArgs>), WampError>> + Send + 'a,
-    {
-        self._register(uri, func_ptr, RegistrationOptions::new()).await
-    }
-
 
     pub async fn register_with_options<T, F, Fut>(&self, uri: T, func_ptr: F, options: RegistrationOptions) -> Result<WampId, WampError>
     where
@@ -726,38 +789,6 @@ impl<'a> Client<'a> {
         };
 
         Ok(())
-    }
-
-    /// Calls a registered RPC endpoint on the server
-    pub async fn call<T: AsRef<str>>(
-        &self,
-        uri: T,
-        arguments: Option<WampArgs>,
-        arguments_kw: Option<WampKwArgs>,
-    ) -> Result<(Option<WampArgs>, Option<WampKwArgs>), WampError> {
-        // Send the request
-        let (res, result) = oneshot::channel();
-        if let Err(e) = self.ctl_channel.send(Request::Call {
-            uri: uri.as_ref().to_string(),
-            options: WampDict::new(),
-            arguments,
-            arguments_kw,
-            res,
-        }) {
-            return Err(From::from(format!(
-                "Core never received our request : {}",
-                e
-            )));
-        }
-
-        // Wait for the result
-        match result.await {
-            Ok(r) => r,
-            Err(e) => Err(From::from(format!(
-                "Core never returned a response : {}",
-                e
-            ))),
-        }
     }
 
     /// Returns the current client status

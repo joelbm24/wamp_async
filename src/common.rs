@@ -68,6 +68,14 @@ pub type WampKwArgs = serde_json::Map<String, WampPayloadValue>;
 
 pub type WampResult = Result<(Option<WampArgs>, Option<WampKwArgs>), WampError>;
 
+pub type WampFunction<'a> = dyn Fn(Option<WampArgs>, Option<WampKwArgs>) -> GenericFuture<'a> + Send + Sync + 'a;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CallResult {
+    args: Option<WampArgs>,
+    kwargs: Option<WampKwArgs>
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ApplicationErrorDetails {
     pub args: WampList,
