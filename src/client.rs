@@ -1,14 +1,12 @@
+use futures::FutureExt;
 use std::collections::{HashMap, HashSet};
 use std::future::Future;
-use futures::FutureExt;
-use std::sync::{Arc};
+use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use log::*;
 use tokio::sync::oneshot;
-use tokio::sync::{
-    mpsc, mpsc::UnboundedReceiver, mpsc::UnboundedSender,
-};
+use tokio::sync::{mpsc, mpsc::UnboundedReceiver, mpsc::UnboundedSender};
 use url::*;
 
 pub use crate::common::*;
@@ -60,7 +58,11 @@ impl Default for ClientConfig {
             .iter()
             .cloned()
             .collect(),
-            serializers: vec![SerializerType::Json, SerializerType::MsgPack, SerializerType::Cbor],
+            serializers: vec![
+                SerializerType::Json,
+                SerializerType::MsgPack,
+                SerializerType::Cbor,
+            ],
             max_msg_size: 0,
             ssl_verify: true,
             websocket_headers: HashMap::new(),
@@ -78,7 +80,7 @@ impl Clone for ClientConfig {
             authextra: self.authextra.clone(),
             max_msg_size: self.max_msg_size.clone(),
             ssl_verify: self.ssl_verify.clone(),
-            websocket_headers: self.websocket_headers.clone()
+            websocket_headers: self.websocket_headers.clone(),
         }
     }
 }
@@ -90,9 +92,7 @@ impl ClientConfig {
         self
     }
     pub fn set_authextra(&mut self, pkey: String) {
-        let m = HashMap::from([
-            ("pubkey".to_owned(), pkey),
-        ]);
+        let m = HashMap::from([("pubkey".to_owned(), pkey)]);
         self.authextra = m;
     }
     /// Returns the currently set agent string
@@ -186,11 +186,11 @@ impl Clone for ClientState {
             Self::Disconnected(c) => {
                 let res: Result<(), WampError> = match c.to_owned() {
                     Ok(a) => Ok(*a),
-                    Err(_e) => Err(WampError::ClientDied)
+                    Err(_e) => Err(WampError::ClientDied),
                 };
                 ClientState::Disconnected(res)
-            },
-            Self::Running => ClientState::Running
+            }
+            Self::Running => ClientState::Running,
         }
     }
 }
@@ -403,15 +403,12 @@ impl<'a> Client<'a> {
         .await
     }
 
-    pub async fn join_realm_with_cryptosign<
-    Realm,
-    AuthenticationId,
-    >(
+    pub async fn join_realm_with_cryptosign<Realm, AuthenticationId>(
         &mut self,
         realm: Realm,
         authentication_id: AuthenticationId,
         public_key: String,
-        secret_key: String
+        secret_key: String,
     ) -> Result<(), WampError>
     where
         Realm: Into<String>,
@@ -432,11 +429,16 @@ impl<'a> Client<'a> {
                     _ => panic!("ERROR"),
                 };
 
-                let signature = CryptoSign::vec_array96(nacl::sign::sign(&CryptoSign::hex2bytes(challenge), &f.skey).ok().unwrap());
+                let signature = CryptoSign::vec_array96(
+                    nacl::sign::sign(&CryptoSign::hex2bytes(challenge), &f.skey)
+                        .ok()
+                        .unwrap(),
+                );
                 let sig = CryptoSign::bytes2hex96(signature);
                 Ok(AuthenticationChallengeResponse::with_signature(sig))
             },
-        ).await
+        )
+        .await
     }
 
     /// Leaves the current realm and terminates the session with the server
@@ -484,7 +486,7 @@ impl<'a> Client<'a> {
     async fn _subscribe<T: AsRef<str>>(
         &self,
         topic: T,
-        options: SubscribeOptions
+        options: SubscribeOptions,
     ) -> Result<(WampId, SubscriptionQueue), WampError> {
         // Send the request
         let (mut res, result) = oneshot::channel();
@@ -526,7 +528,7 @@ impl<'a> Client<'a> {
     pub async fn subscribe_with_options<T: AsRef<str>>(
         &self,
         topic: T,
-        options: SubscribeOptions
+        options: SubscribeOptions,
     ) -> Result<(WampId, SubscriptionQueue), WampError> {
         self._subscribe(topic, options).await
     }
@@ -608,7 +610,12 @@ impl<'a> Client<'a> {
     /// Register an RPC endpoint. Upon succesful registration, a registration ID is returned (used to unregister)
     /// and calls received from the server will generate a future which will be sent on the rpc event channel
     /// returned by the call to [event_loop()](struct.Client.html#method.event_loop)
-    async fn _register<T, F, Fut>(&self, uri: T, func_ptr: F, options: RegistrationOptions) -> Result<WampId, WampError>
+    async fn _register<T, F, Fut>(
+        &self,
+        uri: T,
+        func_ptr: F,
+        options: RegistrationOptions,
+    ) -> Result<WampId, WampError>
     where
         T: AsRef<str>,
         F: Fn(Option<WampArgs>, Option<WampKwArgs>) -> Fut + Send + Sync + 'a,
@@ -645,20 +652,24 @@ impl<'a> Client<'a> {
         Ok(rpc_id)
     }
 
-    pub async fn register_with_client<T, F, Fut>(&self, uri: T, func_ptr: F, options: RegistrationOptions) -> Result<WampId, WampError>
+    pub async fn register_with_client<T, F, Fut>(
+        &'a self,
+        uri: T,
+        func_ptr: F,
+        options: RegistrationOptions,
+    ) -> Result<WampId, WampError>
     where
         T: AsRef<str>,
-        F: Fn(Client<'a>, Option<WampArgs>, Option<WampKwArgs>) -> Fut + Send + Sync + 'a,
+        F: Fn(&Self, Option<WampArgs>, Option<WampKwArgs>) -> Fut + Send + Sync + 'a,
         Fut: Future<Output = Result<(Option<WampArgs>, Option<WampKwArgs>), WampError>> + Send + 'a,
     {
         // Send the request
         let (res, result) = oneshot::channel();
 
-        let copy_client = self.clone();
         if let Err(e) = self.ctl_channel.send(Request::Register {
             uri: uri.as_ref().to_string(),
             res,
-            func_ptr: Box::new(move |a, k| Box::pin(func_ptr(copy_client.to_owned(), a, k))),
+            func_ptr: Box::new(move |a, k| Box::pin(func_ptr(self, a, k))),
             options: match options.get_dict() {
                 Some(dict) => dict,
                 None => WampDict::new(),
@@ -690,11 +701,16 @@ impl<'a> Client<'a> {
         F: Fn(Option<WampArgs>, Option<WampKwArgs>) -> Fut + Send + Sync + 'a,
         Fut: Future<Output = Result<(Option<WampArgs>, Option<WampKwArgs>), WampError>> + Send + 'a,
     {
-        self._register(uri, func_ptr, RegistrationOptions::new()).await
+        self._register(uri, func_ptr, RegistrationOptions::new())
+            .await
     }
 
-
-    pub async fn register_with_options<T, F, Fut>(&self, uri: T, func_ptr: F, options: RegistrationOptions) -> Result<WampId, WampError>
+    pub async fn register_with_options<T, F, Fut>(
+        &self,
+        uri: T,
+        func_ptr: F,
+        options: RegistrationOptions,
+    ) -> Result<WampId, WampError>
     where
         T: AsRef<str>,
         F: Fn(Option<WampArgs>, Option<WampKwArgs>) -> Fut + Send + Sync + 'a,
@@ -763,9 +779,7 @@ impl<'a> Client<'a> {
     /// Returns the current client status
     pub async fn get_cur_status(&mut self) -> &ClientState {
         // Check to see if the status changed
-        let new_status = {
-            self.core_res.lock().await.recv().now_or_never()
-        };
+        let new_status = { self.core_res.lock().await.recv().now_or_never() };
         #[allow(clippy::match_wild_err_arm)]
         match new_status {
             Some(Some(state)) => self.set_next_status(state),
@@ -816,11 +830,12 @@ impl<'a> Client<'a> {
         // Yield until we receive something
         let new_status = {
             match self.core_res.lock().await.recv().await {
-            Some(v) => v,
-            None => {
-                panic!("The event loop died without sending a new status");
+                Some(v) => v,
+                None => {
+                    panic!("The event loop died without sending a new status");
+                }
             }
-        }};
+        };
 
         // Save the new status
         self.set_next_status(new_status)
@@ -861,7 +876,6 @@ impl<'a> Client<'a> {
         }
     }
 }
-
 
 // TODO we probably don't want to actually clone the client.
 // We probably want to make a special client that forwards actions to the main client through a channel.
